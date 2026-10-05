@@ -1,0 +1,65 @@
+name: release-verify
+
+on:
+  workflow_call:
+
+env:
+  SCALE: ${{ vars.STUB_SCALE || '1' }}
+
+jobs:
+  scope:
+    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'stage' || github.head_ref == 'main')) }}
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.decide.outputs.mode }}
+    steps:
+      - id: decide
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then echo "mode=full" >> "$GITHUB_OUTPUT"; else echo "mode=changed" >> "$GITHUB_OUTPUT"; fi
+
+  plan:
+    needs: [scope]
+    if: needs.scope.outputs.mode == 'changed'
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      total: ${{ steps.plan.outputs.total }}
+    steps:
+      - id: plan
+        run: |
+          echo 'shards=[1,2]' >> "$GITHUB_OUTPUT"
+          echo 'total=2' >> "$GITHUB_OUTPUT"
+
+  verify-full:
+    needs: [scope]
+    if: needs.scope.outputs.mode == 'full'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2]
+    steps:
+      - run: sleep $((150 * SCALE)); test "${{ vars.FAIL_VERIFY }}" != "true"
+
+  verify-changed:
+    needs: [scope, plan]
+    if: needs.scope.outputs.mode == 'changed'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards || '[1]') }}
+    steps:
+      - run: sleep $((30 * SCALE))
+
+  verify-int:
+    needs: [scope]
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep $((90 * SCALE))
+
+  lint:
+    needs: [scope]
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep $((180 * SCALE))
