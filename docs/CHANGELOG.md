@@ -1,3 +1,10 @@
+## [1.0.0-rc.4](https://github.com/Normaltic/ci-lab/compare/v1.0.0-rc.3...v1.0.0-rc.4) (2026-10-05)
+
+### Bug Fixes
+
+* scenario2 E ([b8366ee](https://github.com/Normaltic/ci-lab/commit/b8366eeaf9fb9c2c7e8460755d9b07c94429db2f))
+* scenario3 F ([891b315](https://github.com/Normaltic/ci-lab/commit/891b315b81a85b2aa37463e6c9631fe6307f48b2))
+
 ## [1.0.0-rc.3](https://github.com/Normaltic/ci-lab/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2026-10-05)
 
 ### CI
