@@ -1,0 +1,112 @@
+branches:
+  - main
+  - name: stage
+    prerelease: 'rc'
+    channel: 'next'
+preset: 'conventionalcommits'
+tagFormat: 'v${version}'
+plugins:
+  - '@semantic-release/commit-analyzer'
+  - '@semantic-release/release-notes-generator'
+  - '@semantic-release/changelog'
+  - '@semantic-release/exec'
+  - '@saithodev/semantic-release-backmerge'
+  - '@semantic-release/git'
+  - '@semantic-release/github'
+verifyConditions:
+  - '@semantic-release/git'
+  - '@semantic-release/github'
+  - path: '@saithodev/semantic-release-backmerge'
+    backmergeBranches:
+      - from: main
+        to: stage
+    backmergeStrategy: merge
+analyzeCommits:
+  - path: '@semantic-release/commit-analyzer'
+    releaseRules:
+      - type: refactor
+        release: patch
+      - type: build
+        release: patch
+      - type: ci
+        release: patch
+      - type: hotfix
+        release: patch
+      - type: perf
+        release: patch
+      - type: docs
+        scope: README
+        release: patch
+      - type: revert
+        release: patch
+    parserOpts:
+      noteKeywords:
+        - BREAKING CHANGE
+        - BREAKING CHANGES
+generateNotes:
+  - path: '@semantic-release/release-notes-generator'
+    writerOpts:
+      groupBy: 'type'
+      commitGroupsSort:
+        - 'feat'
+        - 'perf'
+        - 'fix'
+        - 'hotfix'
+      commitsSort: 'header'
+    presetConfig:
+      types:
+        - type: 'feat'
+          section: 'Features'
+        # Tracked bug fix with a hotfix branch
+        - type: 'hotfix'
+          section: 'Bug Fixes'
+        # Uninmportant fix (CI testing, etc)
+        - type: 'fix'
+          section: 'Bug Fixes'
+        - type: perf
+          section: Performance
+        - type: refactor
+          section: Refactoring
+        - type: build
+          section: Build
+        - type: ci
+          section: CI
+        - type: revert
+          section: Reverts
+prepare:
+  - path: '@semantic-release/exec'
+    prepareCmd: |
+      sed -i "s/\(\"version.*: \"\).*/\1${nextRelease.version}\",/g" package.json
+  - path: '@semantic-release/changelog'
+    changelogFile: 'docs/CHANGELOG.md'
+  - path: '@semantic-release/git'
+    assets:
+      - 'docs/CHANGELOG.md'
+      - 'package.json'
+      - 'yarn.lock'
+    message: "chore(release): ${nextRelease.version} [manually skip]\n\n${nextRelease.notes}"
+  - path: '@semantic-release/exec'
+    prepareCmd: |
+      echo "prepared"
+publish:
+  - path: '@semantic-release/github'
+success:
+  - path: '@semantic-release/github'
+  - path: '@saithodev/semantic-release-backmerge'
+    backmergeBranches:
+      - from: main
+        to: stage
+  - path: '@semantic-release/exec'
+    successCmd: |
+      if [ ! -z "$GITHUB_RUN_ID" ]; then
+        echo "NEXT_RELEASE_GIT_HEAD=${nextRelease.gitHead}" >> $GITHUB_OUTPUT
+        echo "NEXT_RELEASE_VERSION=${nextRelease.gitTag}" >> $GITHUB_OUTPUT
+        echo "RELEASABLE=true" >> $GITHUB_OUTPUT
+      else
+        mkdir -p /mnt/out
+        echo "${nextRelease.gitHead}" > /mnt/out/git-sha.txt
+        echo "${nextRelease.gitTag}" > /mnt/out/version.txt
+        echo "true" > /mnt/out/releasable.txt
+      fi
+fail:
+  - path: '@semantic-release/github'
