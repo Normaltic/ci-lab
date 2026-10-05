@@ -1,6 +1,6 @@
 {
   "name": "ci-lab",
-  "version": "0.0.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "description": "semantic-release 파이프라인 concurrency 실험장",
   "devDependencies": {
