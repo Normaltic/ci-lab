@@ -1,3 +1,9 @@
+## [1.0.0-rc.3](https://github.com/Normaltic/ci-lab/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2026-10-05)
+
+### CI
+
+* make deploy stub duration configurable (scenario2 D) ([7eb003b](https://github.com/Normaltic/ci-lab/commit/7eb003bca51d78821ea161b7a32bfefb294343f4))
+
 ## [1.0.0-rc.2](https://github.com/Normaltic/ci-lab/compare/v1.0.0-rc.1...v1.0.0-rc.2) (2026-10-05)
 
 ### Bug Fixes
