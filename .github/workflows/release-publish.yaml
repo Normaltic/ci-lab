@@ -65,8 +65,8 @@ jobs:
     steps:
       - run: |
           echo "deploy ${{ needs.build.outputs.version }} ($TARGET)"
+          sleep ${{ vars.DEPLOY_SLEEP || '30' }}
           echo "### deployed ${{ needs.build.outputs.version }} ($TARGET)" >> "$GITHUB_STEP_SUMMARY"
-          sleep 30
 
   update-manifest:
     runs-on: ubuntu-latest
