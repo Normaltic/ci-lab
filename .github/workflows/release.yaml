@@ -12,13 +12,13 @@ on:
       - dev
     types: [opened, synchronize, reopened, ready_for_review]
 
+# PR 만 run 단위로 묶는다. push 는 run 마다 고유 그룹이라 서로 기다리지 않고, 직렬화는 아래 job 단위 그룹이 맡는다
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.event_name == 'pull_request' && format('{0}-{1}', github.workflow, github.ref) || format('{0}-{1}', github.workflow, github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   TARGET: ${{ (github.ref == 'refs/heads/main' && 'prod') || (github.ref == 'refs/heads/stage' && 'stage') || 'preview' }}
-  SCALE: ${{ vars.STUB_SCALE || '1' }}
 
 jobs:
   # 릴리즈 커밋([manually skip])이면 이 job 이 skip 되고 하위 job 이 연쇄 skip 된다
@@ -28,139 +28,37 @@ jobs:
     steps:
       - run: echo "event=${{ github.event_name }}"
 
-  scope:
+  # stage 는 새 push 가 오면 앞 run 의 검증을 취소한다 — 뒤 run 의 release 가 앞 커밋까지 함께 릴리즈한다
+  verify:
     needs: [gate]
-    if: ${{ !(github.event_name == 'pull_request' && (github.head_ref == 'stage' || github.head_ref == 'main')) }}
-    runs-on: ubuntu-latest
-    outputs:
-      mode: ${{ steps.decide.outputs.mode }}
-    steps:
-      - id: decide
-        run: |
-          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then echo "mode=full" >> "$GITHUB_OUTPUT"; else echo "mode=changed" >> "$GITHUB_OUTPUT"; fi
+    uses: ./.github/workflows/release-verify.yaml
+    concurrency:
+      group: ${{ github.workflow }}-verify-${{ github.ref }}
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-  plan:
-    needs: [scope]
-    if: needs.scope.outputs.mode == 'changed'
-    runs-on: ubuntu-latest
-    outputs:
-      shards: ${{ steps.plan.outputs.shards }}
-      total: ${{ steps.plan.outputs.total }}
-    steps:
-      - id: plan
-        run: |
-          echo 'shards=[1,2]' >> "$GITHUB_OUTPUT"
-          echo 'total=2' >> "$GITHUB_OUTPUT"
-
-  verify-full:
-    needs: [scope]
-    if: needs.scope.outputs.mode == 'full'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        shard: [1, 2]
-    steps:
-      - run: sleep $((150 * SCALE)); test "${{ vars.FAIL_VERIFY }}" != "true"
-
-  verify-changed:
-    needs: [scope, plan]
-    if: needs.scope.outputs.mode == 'changed'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        shard: ${{ fromJSON(needs.plan.outputs.shards || '[1]') }}
-    steps:
-      - run: sleep $((30 * SCALE))
-
-  verify-int:
-    needs: [scope]
-    runs-on: ubuntu-latest
-    steps:
-      - run: sleep $((90 * SCALE))
-
-  lint:
-    needs: [scope]
-    runs-on: ubuntu-latest
-    steps:
-      - run: sleep $((180 * SCALE))
-
-  # verify-changed 를 넣으면 그 skip 이 연쇄해 릴리즈가 돌지 않는다
-  release:
-    needs: [verify-full, verify-int, lint]
-    runs-on: ubuntu-latest
-    outputs:
-      git-head: ${{ steps.sr.outputs.NEXT_RELEASE_GIT_HEAD }}
-      version: ${{ steps.sr.outputs.NEXT_RELEASE_VERSION }}
-      releasable: ${{ steps.sr.outputs.RELEASABLE }}
+  # release~배포를 한 job 으로 묶어 락을 잡는다. job 마다 잡으면 앞뒤 run 의 build/deploy 가 엇갈린다
+  publish:
+    needs: [verify]
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage')
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: npm
-      - run: npm ci --no-audit --no-fund
-      - id: sr
-        env:
-          GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_GITHUB_TOKEN }}
-        run: npx semantic-release
-
-  build:
-    needs: [release]
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage') && github.event_name == 'push' && needs.release.outputs.releasable == 'true'
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ needs.release.outputs.version }}
-    steps:
-      - run: |
-          echo "build ${{ needs.release.outputs.version }} ($TARGET)"
-          sleep 30
-
-  side-trigger:
-    needs: [release]
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage') && github.event_name == 'push' && needs.release.outputs.releasable == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        variant: [a, b]
-    steps:
-      - run: echo "trigger ${{ matrix.variant }} ${{ needs.release.outputs.version }}"
-
-  deploy:
-    needs: [build]
-    runs-on: ubuntu-latest
+    uses: ./.github/workflows/release-publish.yaml
+    secrets: inherit
     permissions:
       id-token: write
       contents: read
       pull-requests: read
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage') && github.event_name == 'push' && needs.release.outputs.releasable == 'true'
-    steps:
-      - run: |
-          echo "deploy ${{ needs.build.outputs.version }} ($TARGET)"
-          echo "### deployed ${{ needs.build.outputs.version }} ($TARGET)" >> "$GITHUB_STEP_SUMMARY"
-          sleep 30
+    concurrency:
+      group: ${{ github.workflow }}-publish-${{ github.ref }}
+      cancel-in-progress: false
 
+  # stage 는 검증 취소가 정상 경로라 cancelled 로는 알리지 않는다
   notify-failure:
-    if: ${{ (failure() || cancelled()) && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage') }}
-    needs: [deploy]
+    if: ${{ (failure() || (cancelled() && github.ref == 'refs/heads/main')) && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage') }}
+    needs: [verify, publish]
     runs-on: ubuntu-latest
     steps:
       - run: |
           echo "::warning::NOTIFY $TARGET 배포 실패"
           echo "### NOTIFY: 배포 실패 알림" >> "$GITHUB_STEP_SUMMARY"
-
-  update-manifest:
-    runs-on: ubuntu-latest
-    needs: [release, build]
-    if: ${{ needs.release.outputs.releasable == 'true' }}
-    steps:
-      - run: |
-          echo "manifest ${{ github.ref_name == 'main' && 'prod' || 'stage' }} <- ${{ needs.release.outputs.version }}"
-          echo "### manifest <- ${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
 
   lock-stage:
     runs-on: ubuntu-latest
@@ -174,6 +72,6 @@ jobs:
   unlock-stage:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && always()
-    needs: [lock-stage, release]
+    needs: [lock-stage, publish]
     steps:
       - run: echo "unlock ${{ needs.lock-stage.outputs.id }}"
