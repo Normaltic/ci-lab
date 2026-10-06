@@ -2,6 +2,10 @@ name: release-publish
 
 on:
   workflow_call:
+    inputs:
+      lock-id:
+        type: string
+        default: ''
     outputs:
       version:
         value: ${{ jobs.release.outputs.version }}
@@ -42,7 +46,13 @@ jobs:
     steps:
       - run: |
           echo "build ${{ needs.release.outputs.version }} ($TARGET)"
+          mkdir -p build && echo "${{ needs.release.outputs.version }}" > build/version.txt
           sleep 30
+      - uses: actions/upload-artifact@v6
+        with:
+          name: build-result
+          path: build/
+          retention-days: 1
 
   side-trigger:
     needs: [release]
@@ -63,6 +73,18 @@ jobs:
       pull-requests: read
     if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage') && github.event_name == 'push' && needs.release.outputs.releasable == 'true'
     steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: build-result
+          path: build/
+      - name: Verify artifact
+        run: test "$(cat build/version.txt)" = "${{ needs.build.outputs.version }}" && echo "artifact ok: $(cat build/version.txt)"
+      # 토큰 원문은 찍지 않고 클레임만 확인한다
+      - name: Inspect OIDC claims
+        run: |
+          jwt=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          payload=$(echo "$jwt" | cut -d. -f2 | tr '_-' '/+'); while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="$payload="; done
+          echo "$payload" | base64 -d | jq '{sub, aud, workflow_ref, job_workflow_ref}' | tee -a "$GITHUB_STEP_SUMMARY"
       - run: |
           echo "deploy ${{ needs.build.outputs.version }} ($TARGET)"
           sleep ${{ vars.DEPLOY_SLEEP || '30' }}
@@ -76,3 +98,11 @@ jobs:
       - run: |
           echo "manifest ${{ github.ref_name == 'main' && 'prod' || 'stage' }} <- ${{ needs.release.outputs.version }}"
           echo "### manifest <- ${{ needs.release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+
+  # 현행처럼 release 직후 stage 잠금을 푼다. 배포까지 기다리지 않는다
+  unlock-stage:
+    needs: [release]
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "unlock ${{ inputs.lock-id }} (after release) $(date -u +%T)"
