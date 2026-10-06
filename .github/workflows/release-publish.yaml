@@ -78,7 +78,9 @@ jobs:
           name: build-result
           path: build/
       - name: Verify artifact
-        run: test "$(cat build/version.txt)" = "${{ needs.build.outputs.version }}" && echo "artifact ok: $(cat build/version.txt)"
+        run: |
+          test "$(cat build/version.txt)" = "${{ needs.build.outputs.version }}"
+          echo "artifact ok - $(cat build/version.txt)"
       # 토큰 원문은 찍지 않고 클레임만 확인한다
       - name: Inspect OIDC claims
         run: |
