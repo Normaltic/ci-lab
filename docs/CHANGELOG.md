@@ -1,3 +1,10 @@
+## [1.0.1-rc.1](https://github.com/Normaltic/ci-lab/compare/v1.0.0...v1.0.1-rc.1) (2026-10-06)
+
+### CI
+
+* fix yaml scalar in artifact check ([1e3c32f](https://github.com/Normaltic/ci-lab/commit/1e3c32fac0fa42498125f94b4e6d0de2a126f7a9))
+* unlock stage right after release, verify artifact and OIDC claims ([14d5249](https://github.com/Normaltic/ci-lab/commit/14d5249aac274bc88ffdd30e8ed9c73cd025b0fd))
+
 ## 1.0.0 (2026-10-05)
 
 ### Bug Fixes

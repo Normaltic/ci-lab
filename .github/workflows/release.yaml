@@ -38,9 +38,12 @@ jobs:
 
   # release~배포를 한 job 으로 묶어 락을 잡는다. job 마다 잡으면 앞뒤 run 의 build/deploy 가 엇갈린다
   publish:
-    needs: [verify]
-    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage')
+    needs: [verify, lock-stage]
+    # stage 에선 lock-stage 가 skip 이라 기본 조건으로는 publish 가 연쇄 skip 된다
+    if: ${{ !cancelled() && needs.verify.result == 'success' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage') }}
     uses: ./.github/workflows/release-publish.yaml
+    with:
+      lock-id: ${{ needs.lock-stage.outputs.id }}
     secrets: inherit
     permissions:
       id-token: write
@@ -69,9 +72,10 @@ jobs:
       - id: lock
         run: echo "id=lock-1" >> "$GITHUB_OUTPUT"
 
-  unlock-stage:
+  # publish 가 돌지 못했거나 실패한 경우의 안전망. 정상 경로의 해제는 publish 안에서 release 직후에 한다
+  unlock-stage-fallback:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && always()
+    if: always() && github.ref == 'refs/heads/main' && needs.publish.result != 'success'
     needs: [lock-stage, publish]
     steps:
-      - run: echo "unlock ${{ needs.lock-stage.outputs.id }}"
+      - run: echo "unlock ${{ needs.lock-stage.outputs.id }} (fallback) $(date -u +%T)"
