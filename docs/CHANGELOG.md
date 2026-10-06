@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/Normaltic/ci-lab/compare/v1.0.1...v1.0.2) (2026-10-06)
+
+### Bug Fixes
+
+* deploy failure check ([22abc9e](https://github.com/Normaltic/ci-lab/commit/22abc9e88b9b569fce96d7c445d040ad27b3bde6))
+* main verify failure (fallback unlock check) ([8d994f5](https://github.com/Normaltic/ci-lab/commit/8d994f544cf16d068bfb15a1a28d43a08f2cfd54))
+
 ## [1.0.1](https://github.com/Normaltic/ci-lab/compare/v1.0.0...v1.0.1) (2026-10-06)
 
 ### CI
