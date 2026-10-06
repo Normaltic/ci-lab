@@ -90,6 +90,7 @@ jobs:
       - run: |
           echo "deploy ${{ needs.build.outputs.version }} ($TARGET)"
           sleep ${{ vars.DEPLOY_SLEEP || '30' }}
+          test "${{ vars.FAIL_DEPLOY }}" != "true"
           echo "### deployed ${{ needs.build.outputs.version }} ($TARGET)" >> "$GITHUB_STEP_SUMMARY"
 
   update-manifest:
