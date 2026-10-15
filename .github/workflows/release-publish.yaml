@@ -62,7 +62,9 @@ jobs:
       matrix:
         variant: [a, b]
     steps:
-      - run: echo "trigger ${{ matrix.variant }} ${{ needs.release.outputs.version }}"
+      - run: |
+          echo "trigger ${{ matrix.variant }} ${{ needs.release.outputs.version }}"
+          test "${{ vars.FAIL_SIDE }}" != "true"
 
   deploy:
     needs: [build]
@@ -109,3 +111,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "unlock ${{ inputs.lock-id }} (after release) $(date -u +%T)"
+
+  notify-failure:
+    if: ${{ (failure() || cancelled()) && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/stage') }}
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::warning::NOTIFY $TARGET 배포 실패 (publish)"
+          echo "### NOTIFY: 배포 실패 알림 (publish)" >> "$GITHUB_STEP_SUMMARY"
