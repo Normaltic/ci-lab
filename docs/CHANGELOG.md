@@ -1,9 +1,9 @@
-## [1.0.2-rc.1](https://github.com/Normaltic/ci-lab/compare/v1.0.1...v1.0.2-rc.1) (2026-10-06)
+## [1.0.2](https://github.com/Normaltic/ci-lab/compare/v1.0.1...v1.0.2) (2026-10-06)
 
 ### Bug Fixes
 
-* recheck cancel R1 ([2fc6ccf](https://github.com/Normaltic/ci-lab/commit/2fc6ccf6382c622bf3d41e3ed725ee0cd95330af))
-* recheck cancel R2 ([1c81b02](https://github.com/Normaltic/ci-lab/commit/1c81b0228afc48fa43d6054475aab513b439a8c9))
+* deploy failure check ([22abc9e](https://github.com/Normaltic/ci-lab/commit/22abc9e88b9b569fce96d7c445d040ad27b3bde6))
+* main verify failure (fallback unlock check) ([8d994f5](https://github.com/Normaltic/ci-lab/commit/8d994f544cf16d068bfb15a1a28d43a08f2cfd54))
 
 ## [1.0.1](https://github.com/Normaltic/ci-lab/compare/v1.0.0...v1.0.1) (2026-10-06)
 
