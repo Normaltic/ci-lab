@@ -1,3 +1,16 @@
+## [1.0.3-rc.1](https://github.com/Normaltic/ci-lab/compare/v1.0.2...v1.0.3-rc.1) (2026-10-15)
+
+### Bug Fixes
+
+* recheck cancel R1 ([2fc6ccf](https://github.com/Normaltic/ci-lab/commit/2fc6ccf6382c622bf3d41e3ed725ee0cd95330af))
+* recheck cancel R2 ([1c81b02](https://github.com/Normaltic/ci-lab/commit/1c81b0228afc48fa43d6054475aab513b439a8c9))
+* T1 deploy failure notifies once ([6777b1c](https://github.com/Normaltic/ci-lab/commit/6777b1c6a2ab1267782adedb16ac718fea26211b))
+* T1 deploy failure notifies once (retry) ([08dac1d](https://github.com/Normaltic/ci-lab/commit/08dac1d722c7a4be01913cc1971932c2a36bdc4b))
+
+### CI
+
+* T1 notify scope back to deploy chain, skip stage lock on release commits ([4dab7e1](https://github.com/Normaltic/ci-lab/commit/4dab7e1ec7a6e678cbc8de1ffb1b470b4321a925))
+
 ## [1.0.2](https://github.com/Normaltic/ci-lab/compare/v1.0.1...v1.0.2) (2026-10-06)
 
 ### Bug Fixes
