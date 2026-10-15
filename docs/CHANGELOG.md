@@ -1,3 +1,9 @@
+## [1.0.3-rc.2](https://github.com/Normaltic/ci-lab/compare/v1.0.3-rc.1...v1.0.3-rc.2) (2026-10-15)
+
+### Bug Fixes
+
+* T2 side-trigger failure does not notify ([f7b4cfe](https://github.com/Normaltic/ci-lab/commit/f7b4cfe6ef5d578a6bfd3ffc3e27f3d414d451e4))
+
 ## [1.0.3-rc.1](https://github.com/Normaltic/ci-lab/compare/v1.0.2...v1.0.3-rc.1) (2026-10-15)
 
 ### Bug Fixes
