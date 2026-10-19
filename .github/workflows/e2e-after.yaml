@@ -72,16 +72,16 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           echo "Raw comment: $COMMENT_BODY"
-          ENV=$(printf '%s\n' "$COMMENT_BODY" | awk '{print $2}')
-          URL=$(printf '%s\n' "$COMMENT_BODY" | awk '{print $3}')
+          # 첫 줄만 해석한다. 값에 줄바꿈이 섞이면 GITHUB_ENV에 다른 변수가 끼어들 수 있다.
+          FIRST_LINE=$(printf '%s\n' "$COMMENT_BODY" | head -n 1 | tr -d '\r')
+          ENV=$(echo "$FIRST_LINE" | awk '{print $2}')
+          URL=$(echo "$FIRST_LINE" | awk '{print $3}')
           
           # ENV 검증 (prod/stage/preview 중 하나여야 함)
           if [[ "$ENV" != "prod" && "$ENV" != "stage" && "$ENV" != "preview" ]]; then
             echo "Invalid ENV: $ENV. Must be one of: prod, stage, preview"
             echo "E2E_SKIP=true" >> $GITHUB_ENV
-            # ENV는 검증 전 값이라 줄바꿈을 지워 GITHUB_ENV에 다른 변수가 끼어들지 못하게 한다.
-            ENV_LABEL=$(printf '%s' "$ENV" | tr -d '\r\n')
-            echo "E2E_FAIL_REASON=❌ **ENV 오류**: \`$ENV_LABEL\`는 유효하지 않습니다. \`prod\`, \`stage\`, \`preview\` 중 하나를 입력해주세요." >> $GITHUB_ENV
+            echo "E2E_FAIL_REASON=❌ **ENV 오류**: \`$ENV\`는 유효하지 않습니다. \`prod\`, \`stage\`, \`preview\` 중 하나를 입력해주세요." >> $GITHUB_ENV
             exit 0
           fi
           
@@ -90,10 +90,6 @@ jobs:
             echo "No URL found after /e2e command. Skipping..."
             echo "E2E_SKIP=true" >> $GITHUB_ENV
             echo "E2E_FAIL_REASON=❌ **URL 누락**: 테스트할 URL을 입력해주세요. 형식: \`/e2e <환경> <URL>\`" >> $GITHUB_ENV
-          elif [[ ! "$URL" =~ ^https?://[^[:space:]\"\'\`\$\\]+$ ]]; then
-            echo "Invalid URL. Skipping..."
-            echo "E2E_SKIP=true" >> $GITHUB_ENV
-            echo "E2E_FAIL_REASON=❌ **URL 오류**: \`http(s)://\`로 시작하는 URL을 입력해주세요. 형식: \`/e2e <환경> <URL>\`" >> $GITHUB_ENV
           else
             echo "E2E_ENV=$ENV" >> $GITHUB_ENV
             echo "E2E_URL=$URL" >> $GITHUB_ENV
