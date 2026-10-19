@@ -1,0 +1,179 @@
+name: e2e-after
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  help:
+    if: github.event.issue.pull_request != null && github.event.comment.body == '/e2e help'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post help comment
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const helpMessage = `## 🤖 E2E Workflow 사용법
+            
+            이 워크플로우는 PR에서 E2E 테스트를 실행하기 위한 도구입니다.
+            
+            ### 📝 사용법
+            \`\`\`
+            /e2e <환경> <테스트URL>
+            \`\`\`
+            
+            ### 🌍 지원 환경
+            - **prod**: Production 환경
+            - **stage**: Stage 환경  
+            - **preview**: Preview 환경
+            
+            ### 💡 사용 예시
+            \`\`\`bash
+            # Production 환경 테스트
+            /e2e prod https://app.modusign.co.kr
+            
+            # Stage 환경 테스트
+            /e2e stage https://stage-app.modusign.co.kr
+            
+            # Preview 환경 테스트
+            /e2e preview https://preview-123.modusign.co.kr
+            \`\`\`
+            
+            ### ⚠️ 주의사항
+            - 환경은 반드시 'prod', 'stage', 'preview' 중 하나여야 합니다
+            - ENV, URL은 필수 입력값입니다
+            - 잘못된 형식으로 입력하면 워크플로우가 중단됩니다
+            
+            ### 📋 실행 흐름
+            1. 댓글에서 환경과 URL 추출
+            2. 환경 값 검증 (prod/stage/preview)
+            3. URL 존재 여부 확인
+            4. Argo Workflow로 E2E 테스트 실행
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: helpMessage
+            });
+
+  e2e:
+    if: github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/e2e') && github.event.comment.body != '/e2e help'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract ENV and URL from comment
+        id: extract_env_url
+        # 댓글 본문은 `${{ }}`로 run 스크립트에 보간하지 않는다(script injection 표면).
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          echo "Raw comment: $COMMENT_BODY"
+          ENV=$(printf '%s\n' "$COMMENT_BODY" | awk '{print $2}')
+          URL=$(printf '%s\n' "$COMMENT_BODY" | awk '{print $3}')
+          
+          # ENV 검증 (prod/stage/preview 중 하나여야 함)
+          if [[ "$ENV" != "prod" && "$ENV" != "stage" && "$ENV" != "preview" ]]; then
+            echo "Invalid ENV: $ENV. Must be one of: prod, stage, preview"
+            echo "E2E_SKIP=true" >> $GITHUB_ENV
+            # ENV는 검증 전 값이라 줄바꿈을 지워 GITHUB_ENV에 다른 변수가 끼어들지 못하게 한다.
+            ENV_LABEL=$(printf '%s' "$ENV" | tr -d '\r\n')
+            echo "E2E_FAIL_REASON=❌ **ENV 오류**: \`$ENV_LABEL\`는 유효하지 않습니다. \`prod\`, \`stage\`, \`preview\` 중 하나를 입력해주세요." >> $GITHUB_ENV
+            exit 0
+          fi
+          
+          # URL 검증
+          if [[ -z "$URL" ]]; then
+            echo "No URL found after /e2e command. Skipping..."
+            echo "E2E_SKIP=true" >> $GITHUB_ENV
+            echo "E2E_FAIL_REASON=❌ **URL 누락**: 테스트할 URL을 입력해주세요. 형식: \`/e2e <환경> <URL>\`" >> $GITHUB_ENV
+          elif [[ ! "$URL" =~ ^https?://[^[:space:]\"\'\`\$\\]+$ ]]; then
+            echo "Invalid URL. Skipping..."
+            echo "E2E_SKIP=true" >> $GITHUB_ENV
+            echo "E2E_FAIL_REASON=❌ **URL 오류**: \`http(s)://\`로 시작하는 URL을 입력해주세요. 형식: \`/e2e <환경> <URL>\`" >> $GITHUB_ENV
+          else
+            echo "E2E_ENV=$ENV" >> $GITHUB_ENV
+            echo "E2E_URL=$URL" >> $GITHUB_ENV
+            echo "E2E_SKIP=false" >> $GITHUB_ENV
+            echo "Extracted ENV: $ENV"
+            echo "Extracted URL: $URL"
+          fi
+
+      - name: Post validation error comment
+        if: env.E2E_SKIP == 'true' && env.E2E_FAIL_REASON != ''
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const failureMessage = `## 🚫 E2E 테스트 실행 실패
+            
+            ${process.env.E2E_FAIL_REASON}
+            
+            ### 📝 올바른 사용법
+            \`\`\`
+            /e2e <환경> <테스트URL>
+            \`\`\`
+            
+            ### 💡 예시
+            \`\`\`bash
+            /e2e prod https://app.modusign.co.kr
+            /e2e stage https://stage-app.modusign.co.kr
+            /e2e preview https://preview-123.modusign.co.kr
+            \`\`\`
+            
+            💬 도움이 필요하시면 '/e2e help'를 입력해주세요.
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: failureMessage
+            });
+
+      - name: Get PR details
+        if: env.E2E_SKIP != 'true'
+        id: pr_details
+        uses: actions/github-script@v9
+        with:
+          script: |
+            // PR 상세 정보를 가져옵니다
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            
+            // 필요한 정보를 output으로 설정합니다
+            core.setOutput('branch', pullRequest.head.ref);
+            core.setOutput('title', pullRequest.title);
+            core.setOutput('head_sha', pullRequest.head.sha);
+            core.setOutput('assignee', pullRequest.assignee ? pullRequest.assignee.login : 'unassigned');
+
+      # 오퍼레이터 계정(E2E_OPERATOR_EMAIL/PASSWORD)은 Argo WorkflowTemplate이 k8s Secret
+      # `web-app-e2e-operator`에서 pod env로 주입한다 — payload에 넣지 않는다(로그 노출 방지).
+      - name: Run trigger argo workflow
+        if: env.E2E_SKIP != 'true'
+        env:
+          WF_URL: https://argo-wf-pub.modusign.co.kr/api/v1/events/argo-system
+          WF_NAME: web-app-e2e
+          PR_TITLE: ${{ steps.pr_details.outputs.title }}
+          PR_BRANCH: ${{ steps.pr_details.outputs.branch }}
+          PR_ASSIGNEE: ${{ steps.pr_details.outputs.assignee }}
+          PR_HEAD_SHA: ${{ steps.pr_details.outputs.head_sha }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          ARGO_TOKEN: ${{ secrets.ARGO_WF_K8S_SERVICEACCOUNT_TOKEN }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg branch "$PR_BRANCH" \
+            --arg modusignEnv "$E2E_ENV" \
+            --arg testUrl "$E2E_URL" \
+            --arg prNumber "$PR_NUMBER" \
+            --arg prTitle "$PR_TITLE" \
+            --arg prAssignee "$PR_ASSIGNEE" \
+            --arg commitSha "$PR_HEAD_SHA" \
+            '{branch: $branch, modusignEnv: $modusignEnv, testUrl: $testUrl, prNumber: $prNumber, prTitle: $prTitle, prAssignee: $prAssignee, commitSha: $commitSha}')
+          echo "STUB curl $WF_URL/$WF_NAME -d payload:"
+          printf '%s\n' "$PAYLOAD"
